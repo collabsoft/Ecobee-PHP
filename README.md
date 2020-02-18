@@ -30,7 +30,7 @@ Options:
 
 ## Example Queries
 
-Here are some example queries you could run on the SQLite database that this script creates:
+Here are some example queries you could run on the SQLite database that this script creates. The charts were created by pasting the query results into Google Sheets and using the chart creation tool there.
 
 ### Number of days that each temp was the low temp.
 
@@ -49,6 +49,8 @@ GROUP BY lowOutdoorTemp
 ORDER BY lowOutdoorTemp ASC
 ```
 
+![](/charts/daily-low-temperatures.png)
+
 ### Number of days that each temp was the high temp.
 
 ```
@@ -65,6 +67,9 @@ FROM (
 GROUP BY highOutdoorTemp
 ORDER BY highOutdoorTemp ASC
 ```
+
+![](/charts/daily-high-temperatures.png)
+
 
 ### Average number of seconds the heat ran on a day with that high temp.
 
@@ -86,6 +91,8 @@ GROUP BY highOutdoorTemp
 ORDER BY highOutdoorTemp ASC
 ```
 
+![](/charts/furnace-runtime-vs-high-temp.png)
+
 ### Average number of seconds the a/c ran on a day with that low temp.
 
 ```
@@ -104,6 +111,8 @@ GROUP BY lowOutdoorTemp
 ORDER BY lowOutdoorTemp ASC
 ```
 
+![](/charts/ac-runtime-vs-low-temp.png)
+
 ### Average number of seconds the a/c ran on a day with that high temp.
 
 ```
@@ -121,6 +130,8 @@ FROM (
 GROUP BY highOutdoorTemp
 ORDER BY highOutdoorTemp ASC
 ```
+
+![](/charts/ac-runtime-vs-high-temp.png)
 
 ### Average number of seconds the HVAC ran based on the current outdoor temp.
 
@@ -142,6 +153,8 @@ FROM (
 ORDER BY roundedOutdoorTemp
 ```
 
+![](/charts/hvac-runtime.png)
+
 ### Average number of seconds an individual HVAC system (thermostat ID #12345678) ran based on the current outdoor temp.
 
 ```
@@ -162,3 +175,5 @@ FROM (
 	)
 ORDER BY roundedOutdoorTemp
 ```
+
+![](/charts/individual-hvac-runtime.png)
