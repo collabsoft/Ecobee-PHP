@@ -1,6 +1,6 @@
 <?php
 
-$opts = getopt( "", array( "download-all", "download-new", "date-begin:", 'thermostat_id:' ) );
+$opts = getopt( "", array( "download-all", "download-new", "date-begin:", 'thermostat-id:', ) );
 
 if ( empty( $opts ) || ( ! isset( $opts['download-all'] ) && ! isset( $opts['download-new'] ) ) ) {
 	die( "
@@ -32,7 +32,7 @@ Options:
                               data from this date, moving back in time. Otherwise, it will begin
                               yesterday.
 
-     --thermostat_id          Only download data for this thermostat. The thermostat ID can be found
+     --thermostat-id          Only download data for this thermostat. The thermostat ID can be found
                               in config.json in the 'identifier' parameter, or in the ecobee.com URLs
                               like https://www.ecobee.com/consumerportal/index.html#/devices/thermostats/12345678
 ");
@@ -222,9 +222,9 @@ function get_data() {
 	
 	$thermostats = get_config( "thermostats" );
 	
-	if ( isset( $opts['thermostat_id'] ) ) {
+	if ( isset( $opts['thermostat-id'] ) ) {
 		foreach ( $thermostats as $idx => $thermostat ) {
-			if ( $thermostat->identifier != $opts['thermostat_id'] ) {
+			if ( $thermostat->identifier != $opts['thermostat-id'] ) {
 				unset( $thermostats[ $idx ] );
 			}
 		}
