@@ -257,6 +257,7 @@ function get_data() {
 			while ( $row = $record_count->fetchArray() ) {
 				if ( 288 === $row["count"] ) {
 					if ( isset( $opts['download-new'] ) ) {
+						// @todo If data was downloaded for a single thermostat, this may cause days to be ignored for other thermostats, since it quits upon the first notice of data from any thermostat.
 						echo "Finished downloading all new data.\n";
 						break 3;
 					}
