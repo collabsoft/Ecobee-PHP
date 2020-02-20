@@ -1,6 +1,6 @@
 <?php
 
-$opts = getopt( "", array( "download-all", "download-new", "date-begin:", 'thermostat-id:', ) );
+$opts = getopt( "", array( "download-all", "download-new", "date-begin:", 'thermostat-id:', 'db-path:', 'config-path:', ) );
 
 if ( empty( $opts ) || ( ! isset( $opts['download-all'] ) && ! isset( $opts['download-new'] ) ) ) {
 	die( "
@@ -20,21 +20,27 @@ Usage:
 
 Options:
 
-     --download-all           Download all of the data that is available for your thermostats
-                              and save it to a SQLite database. It will begin with yesterday and
-                              download a day's worth of data at a time until it finds 10 days in
-                              a row with no data available. This may take a while.
+     --download-all               Download all of the data that is available for your thermostats
+                                  and save it to a SQLite database. It will begin with yesterday and
+                                  download a day's worth of data at a time until it finds 10 days in
+                                  a row with no data available. This may take a while.
 
-     --download-new           Download any data newer than the last data that was saved to the
-                              SQLite database.
+     --download-new               Download any data newer than the last data that was saved to the
+                                  SQLite database.
 
-     --date-begin=YYYY-MM-DD  If either of the --download-* flags are present, begin downloading
-                              data from this date, moving back in time. Otherwise, it will begin
-                              yesterday.
+     --date-begin=YYYY-MM-DD      If either of the --download-* flags are present, begin downloading
+                                  data from this date, moving back in time. Otherwise, it will begin
+                                  yesterday.
 
-     --thermostat-id          Only download data for this thermostat. The thermostat ID can be found
-                              in config.json in the 'identifier' parameter, or in the ecobee.com URLs
-                              like https://www.ecobee.com/consumerportal/index.html#/devices/thermostats/12345678
+     --thermostat-id              Only download data for this thermostat. The thermostat ID can be found
+                                  in ecobee-config.json in the 'identifier' parameter, or in the ecobee.com URLs
+                                  like https://www.ecobee.com/consumerportal/index.html#/devices/thermostats/12345678
+
+     --db-path=/path/to/file      Use this path for the SQLite database file. If a directory is supplied,
+                                  a file named ecobee.db will be created in it.
+
+     --config-path=/path/to/file  Use this path for the config JSON file. If a directory is supplied,
+                                  a file named ecobee-config.json will be created in it.
 ");
 }
 
@@ -48,12 +54,37 @@ get_tokens();
 get_thermostats();
 get_data();
 
+function get_config_file_path() {
+	global $opts;
+	
+	if ( ! isset( $opts['config-path'] ) ) {
+		return 'ecobee-config.json';
+	}
+	
+	$path = $opts['config-path'];
+	
+	$path = preg_replace( '/^~/', $_SERVER['HOME'], $path );
+	
+	if ( file_exists( $path ) && is_dir( $path ) ) {
+		// Ensure that the path ends in a separator.
+		$path = rtrim( $path, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR;
+		
+		// Add a default filename.
+		$path .= "ecobee-config.json";
+	}
+	else {
+		// The user supplied their own filename.
+	}
+	
+	return $path;
+}
+
 function get_config( $param ) {
-	if ( ! file_exists( "config.json" ) ) {
+	if ( ! file_exists( get_config_file_path() ) ) {
 		return false;
 	}
 	
-	$config_text = file_get_contents( "config.json" );
+	$config_text = file_get_contents( get_config_file_path() );
 	
 	if ( ! $config_text ) {
 		return false;
@@ -73,10 +104,10 @@ function get_config( $param ) {
 }
 
 function set_config( $param, $value ) {
-	$config_data = json_decode( file_get_contents( "config.json" ) );
+	$config_data = json_decode( file_get_contents( get_config_file_path() ) );
 	$config_data->{ $param } = $value;
 	
-	file_put_contents( "config.json", json_encode( $config_data ) );
+	file_put_contents( get_config_file_path(), json_encode( $config_data ) );
 }
 
 function api_request( $url ) {
@@ -118,7 +149,7 @@ function register_application() {
 	$line = fgets( $handle );
 	fclose( $handle );
 	
-	file_put_contents( "config.json", json_encode( $config_json ) );
+	file_put_contents( get_config_file_path(), json_encode( $config_json ) );
 }
 
 function get_tokens() {
@@ -357,7 +388,28 @@ function get_data() {
 }
 
 function get_db() {
-	$database_file = "ecobee.db";
+	global $opts;
+
+	if ( isset( $opts['db-path'] ) ) {
+		$database_file = $opts['db-path'];
+		
+		$database_file = preg_replace( '/^~/', $_SERVER['HOME'], $database_file );
+		
+		if ( file_exists( $database_file ) && is_dir( $database_file ) ) {
+			// Ensure that the path ends in a separator.
+			$database_file = rtrim( $database_file, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR;
+			
+			// Add a default filename.
+			$database_file .= "ecobee.db";
+		}
+		else {
+			// The user supplied their own filename.
+		}
+	}
+	else {
+		// Just put it in the current directory.
+		$database_file = "ecobee.db";
+	}
 	
 	$db = new SQLite3( $database_file );
 	$db->exec( "CREATE TABLE IF NOT EXISTS history ( thermostat_id INTEGER, date TEXT, time TEXT, auxHeat1 NUMBER, auxHeat2 NUMBER, auxHeat3 NUMBER, compCool1 NUMBER, compCool2 NUMBER, compHeat1 NUMBER, compHeat2 NUMBER, dehumidifier NUMBER, dmOffset NUMBER, economizer NUMBER, fan NUMBER, humidifier NUMBER, hvacMode TEXT, outdoorHumidity NUMBER, outdoorTemp NUMBER, sky NUMBER, ventilator NUMBER, wind NUMBER, zoneAveTemp NUMBER, zoneCalendarEvent TEXT, zoneClimate TEXT, zoneCoolTemp NUMBER, zoneHeatTemp NUMBER, zoneHumidity NUMBER, zoneHumidityHigh NUMBER, zoneHumidityLow NUMBER, zoneHvacMode TEXT, zoneOccupancy TEXT, UNIQUE (thermostat_id, date, time) ON CONFLICT REPLACE )" );

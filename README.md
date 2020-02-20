@@ -12,21 +12,27 @@ Usage:
 
 Options:
 
-     --download-all           Download all of the data that is available for your thermostats
-                              and save it to a SQLite database. It will begin with yesterday and
-                              download a day's worth of data at a time until it finds 10 days in
-                              a row with no data available. This may take a while.
+     --download-all               Download all of the data that is available for your thermostats
+                                  and save it to a SQLite database. It will begin with yesterday and
+                                  download a day's worth of data at a time until it finds 10 days in
+                                  a row with no data available. This may take a while.
 
-     --download-new           Download any data newer than the last data that was saved to the
-                              SQLite database.
+     --download-new               Download any data newer than the last data that was saved to the
+                                  SQLite database.
 
-     --date-begin=YYYY-MM-DD  If either of the --download-* flags are present, begin downloading
-                              data from this date, moving back in time. Otherwise, it will begin
-                              yesterday.
+     --date-begin=YYYY-MM-DD      If either of the --download-* flags are present, begin downloading
+                                  data from this date, moving back in time. Otherwise, it will begin
+                                  yesterday.
 
-     --thermostat_id          Only download data for this thermostat. The thermostat ID can be found
-                              in config.json in the 'identifier' parameter, or in the ecobee.com URLs
-                              like https://www.ecobee.com/consumerportal/index.html#/devices/thermostats/12345678
+     --thermostat-id              Only download data for this thermostat. The thermostat ID can be found
+                                  in ecobee-config.json in the 'identifier' parameter, or in the ecobee.com URLs
+                                  like https://www.ecobee.com/consumerportal/index.html#/devices/thermostats/12345678
+
+     --db-path=/path/to/file      Use this path for the SQLite database file. If a directory is supplied,
+                                  a file named ecobee.db will be created in it.
+
+     --config-path=/path/to/file  Use this path for the config JSON file. If a directory is supplied,
+                                  a file named ecobee-config.json will be created in it.
 
 ## Example Queries
 
