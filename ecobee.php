@@ -1,8 +1,8 @@
 <?php
 
-$opts = getopt( "", array( "download-all", "download-new", "date-begin:", 'thermostat-id:', 'db-path:', 'config-path:', ) );
+$opts = getopt( "", array( "download-all", "download-new", "date-begin:", 'thermostat-id:', 'db-path:', 'config-path:', 'chart::', ) );
 
-if ( empty( $opts ) || ( ! isset( $opts['download-all'] ) && ! isset( $opts['download-new'] ) ) ) {
+if ( empty( $opts ) || ( ! isset( $opts['chart'] ) && ! isset( $opts['download-all'] ) && ! isset( $opts['download-new'] ) ) ) {
 	die( "
 This is a script I wrote to download all of the data from my Ecobee thermostats
 and store it in a SQLite database so I could query it locally.
@@ -46,13 +46,18 @@ Options:
 
 define( 'ECOBEE_API_KEY', 'p1hl0IGkaAs0oV1goBDWVC6o0zT5ZvMo' );
 
-if ( ! get_config( "code" ) ) {
-	register_application();
+if ( isset( $opts['chart'] ) ) {
+	chart_system_runtime( $opts['chart'] );
 }
+else {
+	if ( ! get_config( "code" ) ) {
+		register_application();
+	}
 
-get_tokens();
-get_thermostats();
-get_data();
+	get_tokens();
+	get_thermostats();
+	get_data();
+}
 
 function get_config_file_path() {
 	global $opts;
@@ -79,7 +84,7 @@ function get_config_file_path() {
 	return $path;
 }
 
-function get_config( $param ) {
+function get_config( $param = null ) {
 	if ( ! file_exists( get_config_file_path() ) ) {
 		return false;
 	}
@@ -94,6 +99,10 @@ function get_config( $param ) {
 	
 	if ( ! $config_data ) {
 		return false;
+	}
+	
+	if ( is_null( $param ) ) {
+		return $config_data;
 	}
 	
 	if ( ! isset( $config_data->{ $param } ) ) {
@@ -416,4 +425,199 @@ function get_db() {
 	$db->exec( "CREATE INDEX IF NOT EXISTS thermostat_id_index ON history (thermostat_id)" );
 	
 	return $db;
+}
+
+/* How much has each system run in the last 7 days? */
+
+
+
+function chart_system_runtime( $days = 10 ) {
+	if ( ! $days ) {
+		$days = 10;
+	}
+	
+	$days = max( 1, $days );
+	$dates = array();
+	
+	for ( $i = $days + 2; $i >= 2; $i-- ) {
+		$dates[] = date( "Y-m-d", strtotime( "-" . $i . " days" ) );
+	}
+	
+	$date_start = date( "Y-m-d", strtotime( "-" . ( $days + 2 ) . " days" ) );
+	$date_end = date( "Y-m-d", strtotime( "-2 days" ) );
+	
+	$systems = array(
+		"Heat",
+		"Backup Heat",
+		"Cool",
+		"Dehumidifier",
+		"Humidifier",
+		"Fan",
+	);
+
+	$db = get_db();
+	
+	$statement = $db->prepare( "SELECT
+			thermostat_id,
+			date,
+			SUM(MAX(compHeat1, compHeat2)) `Heat`,
+			SUM(MAX(auxHeat1, auxHeat2, auxHeat3)) `Backup Heat`,
+			SUM(MAX(compCool1, compCool2)) `Cool`,
+			SUM(dehumidifier) `Dehumidifier`,
+			SUM(humidifier) `Humidifier`
+			/*SUM(fan) `Fan`*/
+		FROM history
+		WHERE date >= :date_start AND date <= :date_end
+		GROUP BY thermostat_id, date
+		ORDER BY thermostat_id ASC, date ASC" );
+
+	$statement->bindValue( ":date_start", $date_start );
+	$statement->bindValue( ":date_end", $date_end );
+	$result = $statement->execute();
+	
+	$thermostats = array();
+	
+	while ( $record = $result->fetchArray() ) {
+		if ( ! isset( $thermostats[ $record['thermostat_id'] ] ) ) {
+			$thermostats[ $record['thermostat_id'] ] = array();
+		}
+		
+		$thermostats[ $record['thermostat_id'] ][ $record['date'] ] = $record;
+	}
+	
+	$statement = $db->prepare( "SELECT
+		AVG(outdoorTemp) avgTemp,
+		date
+		FROM history
+		WHERE date >= :date_start AND date <= :date_end
+		GROUP BY date
+		ORDER BY date ASC" );
+
+	$statement->bindValue( ":date_start", $date_start );
+	$statement->bindValue( ":date_end", $date_end );
+	$temp_result = $statement->execute();
+	
+	$outdoor_temps = array();
+	
+	while ( $record = $temp_result->fetchArray() ) {
+		$outdoor_temps[ $record['date'] ] = $record['avgTemp'];
+	}
+	
+	$db->close();
+	
+	$config = get_config();
+	
+	$csv_data = array();
+	
+	$header = array();
+	$header[] = "Date";
+	
+	foreach ( $thermostats as $thermostat_id => $records ) {
+		$thermostat_name = "";
+		
+		foreach ( $config->thermostats as $thermostat_entry ) {
+			if ( $thermostat_entry->identifier == $thermostat_id ) {
+				$thermostat_name = $thermostat_entry->name;
+				break;
+			}
+		}
+		
+		foreach ( $systems as $system ) {
+			$header[] = trim( $thermostat_name . " " . $system );
+		}
+	}
+	
+	$header[] = "Day's Average Temp";
+	
+	$csv_data = array(
+		$header,
+	);
+	
+	foreach ( $dates as $date ) {
+		$row = array();
+		$row[] = $date;
+		
+		foreach ( $thermostats as $thermostat_id => $records ) {
+			foreach ( $systems as $system ) {
+				if ( isset( $records[ $date ][ $system ] ) ) {
+					$row[] = round( $records[ $date ][ $system ] / 86400, 2 );
+				}
+				else {
+					$row[] = 0;
+				}
+			}
+		}
+		
+		if ( isset( $outdoor_temps[ $date ] ) ) {
+			$row[] = round( $outdoor_temps[ $date ] );
+		}
+		
+		$csv_data[] = $row;
+	}
+	
+	$column_totals = array();
+
+	foreach ( $csv_data as $row_number => $row ) {
+		if ( 0 == $row_number ) {
+			continue;
+		}
+		
+		for ( $i = 1; $i < count( $row ); $i++ ) {
+			if ( ! isset( $column_totals[ $i ] ) ) {
+				$column_totals[ $i ] = 0;
+			}
+			
+			$column_totals[ $i ] += $row[ $i ];
+		}
+	}
+
+	for ( $i = count( $csv_data[0] ) - 1; $i >= 1; $i-- ) {
+		if ( $column_totals[ $i ] == 0 ) {
+			foreach ( $csv_data as $row_number => $row ) {
+				array_splice( $row, $i, 1 );
+				$csv_data[ $row_number ] = $row;
+			}
+		}
+	}
+	
+	?>
+	<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8"/>
+		<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+		<script type="text/javascript">
+			google.charts.load('current', {'packages':['corechart']});
+			google.charts.setOnLoadCallback(drawChart);
+
+			function drawChart() {
+				var data = google.visualization.arrayToDataTable(<?php echo json_encode( $csv_data ); ?>);
+
+				var options = {
+					title: 'HVAC System Runtimes',
+					curveType: 'function',
+					legend: { position: 'bottom' },
+					vAxes : {
+						0 : { title: 'Percent of time running', maxValue: 1, minValue: 0, format: 'percent' },
+						1 : { title: 'Average Outdoor Temp', minValue: 30, maxValue: 70, viewWindow: { min: 30 } }
+					},
+					series : {
+						<?php for ( $i = 0; $i < count( $csv_data[0] ) - 2; $i++ ) { ?>
+							<?php echo $i; ?> : {targetAxisIndex : 0},
+						<?php } ?>
+						<?php echo count( $csv_data[0] ) - 2; ?> : {targetAxisIndex : 1, lineDashStyle : [4, 4]}
+					}
+				};
+
+				var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+
+				chart.draw(data, options);
+			}
+		</script>
+	</head>
+	<body>
+		<div id="curve_chart" style="width: 900px; height: 500px"></div>
+	</body>
+</html>
+	<?php
 }
